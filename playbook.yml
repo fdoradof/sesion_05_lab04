@@ -1,0 +1,55 @@
+---
+- name: "Laboratorio de Registros"
+  hosts: nodo_01
+  tasks:
+    - name: "Cambio_de_zona_horaria_a_Moscow"
+      timezone:
+        name: Europe/Moscow
+      register: datos_zona_horaria_moscow
+      when: (ansible_date_time.weekday == "lunes" and ansible_date_time.hour >= "12") or 
+            (ansible_date_time.weekday == "miercoles" and ansible_date_time.hour >= "12") or
+            (ansible_date_time.weekday == "viernes" and ansible_date_time.hour >= "12") or
+            (ansible_date_time.weekday == "domingo" and ansible_date_time.hour >= "12")
+  
+    - name: "Cambio de zona horaria a Tokyo"
+      timezone:
+        name: Asia/Tokyo
+      register: datos_zona_horaria_tokio
+      when: (ansible_date_time.weekday == "martes" and ansible_date_time.hour >= "12") or 
+            (ansible_date_time.weekday == "jueves" and ansible_date_time.hour >= "12") or
+            (ansible_date_time.weekday == "sábado" and ansible_date_time.hour >= "12")
+
+    - name: "Creacion de fichero de datos"
+      file:
+        path: "/tmp/datos_horarios_{{ ansible_facts['hostname'] }}.txt"
+        state: touch
+    
+    - name: "Registrar la hora despues del cambio"
+      command: "date +%T"
+      register: hora_post_cambio
+    
+    - name: "Insertar registros en el fichero cuando a cambiado la zona horaria a Moscow"
+      blockinfile:
+        path: "/tmp/datos_horarios_{{ ansible_facts['hostname'] }}.txt"
+        block: |
+          La zona horaria antes del cambio es {{ datos_zona_horaria_moscow.diff.before.name }} y la hora es {{ ansible_date_time.hour }}
+          La zona horaria despues del cambio es {{ datos_zona_horaria_moscow.diff.after.name }} y la hora es {{ hora_post_cambio.stdout_lines }}
+      when: datos_zona_horaria_moscow is change
+
+    - name: "Insertar registros en el fichero cuando a cambiado la zona horaria a Tokio"
+      blockinfile:
+        path: "/tmp/datos_horarios_{{ ansible_facts['hostname'] }}.txt"
+        block: |
+          La zona horaria antes del cambio es {{ datos_zona_horaria_tokio.diff.before.name }} y la hora es {{ ansible_date_time.hour }}
+          La zona horaria despues del cambio es {{ datos_zona_horaria_tokio.diff.after.name }} y la hora es {{ hora_post_cambio.stdout_lines }}
+      when: datos_zona_horaria_tokio is changed
+    
+    - name: "Volver a la zona horaria inicial despues del cambio a Moscow"
+      timezone:
+        name: "{{ datos_zona_horaria_moscow.diff.before.name }}"
+      when: datos_zona_horaria_moscow is changed
+    
+    - name: "Volver a la zona horaria inicial despues del cambio a Tokio"
+      timezone:
+        name: "{{ datos_zona_horaria_tokio.diff.before.name }}"
+      when: datos_zona_horaria_tokio is changed
